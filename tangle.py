@@ -267,7 +267,6 @@ class Tangle(object):
             plt.yticks([])
             plt.show()
 
-
 class Transaction(object):
 
     def __init__(self, tangle, time, approved_transactions, num, NodeWeight, content):
@@ -376,16 +375,41 @@ class watcher():
         self.tangle_time = tangle.time
         self.number_of_nodes = len(node_g.nodes)
         self.tangle = tangle
+        self.record_of_tips = [self.number_of_tips]
+        self.record_of_confirmations = [self.confirmed_transactions]
+        self.record_of_transactions = [self.number_of_transactions]
+        self.times = [self.tangle_time]
     
     def update(self):
         self.number_of_transactions = len(self.tangle.transactions)
+        self.record_of_transactions.append(self.number_of_transactions)
         self.confirmed_transactions = 0
         for c in self.tangle.transactions:
             if c.confirmed == True:
                 self.confirmed_transactions += 1
-    
+        self.number_of_tips = len(self.tangle.tips())
+
+        self.times.append(self.tangle.time)
+        self.record_of_tips.append(self.number_of_tips)
+        self.record_of_confirmations.append(self.confirmed_transactions)
+
+
     def printStats(self):
         print("--------------")
         print(self.confirmed_transactions)
         print(self.number_of_transactions)
 
+    def plotTransactions(self):
+        plt.plot(self.record_of_transactions, self.times)
+        plt.xlabel('Time')
+        plt.ylabel('Transactions')
+
+    def plot_tips_over_time(self):
+        plt.bar(self.times, self.record_of_tips)
+        plt.xlabel('Time')
+        plt.ylabel('Tips')
+
+    def plot_confirm_over_time(self):
+        plt.plot(self.record_of_confirmations, self.times)
+        plt.xlabel('Time')
+        plt.ylabel('Confirmations')
