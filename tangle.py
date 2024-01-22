@@ -163,12 +163,14 @@ class Tangle(object):
         if self.tip_selection == 'mcmc':
             approved_tips = set(self.mcmc())
         elif self.tip_selection == 'urts':
-            approved_tips = set(self.urts())
+            #approved_tips = set(self.urts())
+            approved_tips = self.urts()
         else:
             raise Exception()
 
         transaction = Transaction(self, self.time, approved_tips, self.count - 1, NodeWeight, content)
         #self.printTransactionStats(transaction)
+        #print(approved_tips, "AP")
         for t in approved_tips:
             t.approved_time = np.minimum(self.time, t.approved_time)
             t._approved_directly_by.add(transaction)
@@ -186,10 +188,12 @@ class Tangle(object):
     def urts(self):
         tips = self.tips()
         if len(tips) == 0:
-            return np.random.choice([t for t in self.transactions if t.is_visible()]),
+            return np.random.choice([t for t in self.transactions if t.is_visible()])
         if len(tips) == 1:
-            return tips[0],
-        return np.random.choice(tips, 2)
+            return [tips[0]]
+        val = np.random.choice(tips, 2)
+        #print(val)
+        return val
 
     def mcmc(self):
         num_particles = 10
@@ -209,6 +213,7 @@ class Tangle(object):
             
         #return [key for key in sorted(distances, key=distances.get, reverse=False)[:2]]
         tips = self.tip_walk_cache[:2]
+        #print(tips)
         self.tip_walk_cache = list()
 
         return tips
@@ -307,8 +312,9 @@ class Transaction(object):
     def cumulative_weight_delayed(self):
         cached = self.tangle.cw_cache.get(self.num)
         if cached:
-            #print(cached)
+            #print("CWD", cached)
             if cached >= self.tangle.theta:
+                print("CWD", cached, self.tangle.theta)
                 self.confirmed = True
             return cached
 
@@ -384,6 +390,7 @@ class watcher():
         self.number_of_transactions = len(self.tangle.transactions)
         self.record_of_transactions.append(self.number_of_transactions)
         self.confirmed_transactions = 0
+        print(self.tangle.transactions)
         for c in self.tangle.transactions:
             if c.confirmed == True:
                 self.confirmed_transactions += 1
@@ -410,6 +417,7 @@ class watcher():
         plt.ylabel('Tips')
 
     def plot_confirm_over_time(self):
+        print(self.record_of_confirmations, self.times)
         plt.plot(self.record_of_confirmations, self.times)
         plt.xlabel('Time')
         plt.ylabel('Confirmations')
