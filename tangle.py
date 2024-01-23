@@ -159,14 +159,18 @@ class Tangle(object):
         dt_time = np.random.exponential(1.0/self.rate)
         self.time += dt_time
         self.count += 1
-
-        if self.tip_selection == 'mcmc':
-            approved_tips = set(self.mcmc())
-        elif self.tip_selection == 'urts':
-            #approved_tips = set(self.urts())
-            approved_tips = self.urts()
-        else:
-            raise Exception()
+        done = False
+        while done == False:
+            if self.tip_selection == 'mcmc':
+                approved_tips = set(self.mcmc())
+                if len(approved_tips) > 0:
+                    done = True
+            elif self.tip_selection == 'urts':
+                #approved_tips = set(self.urts())
+                approved_tips = self.urts()
+                done = True
+            else:
+                raise Exception()
 
         transaction = Transaction(self, self.time, approved_tips, self.count - 1, NodeWeight, content)
         #self.printTransactionStats(transaction)
@@ -195,27 +199,33 @@ class Tangle(object):
         #print(val)
         return val
 
+    def orphan_protocol(self, index):
+        for i in self.transactions:
+            if i.num == index:
+                i.orphaned = True
+                print(i, i.orphaned)
+
     def mcmc(self):
         num_particles = 10
         lower_bound = int(np.maximum(0, self.count - 20.0*self.rate))
         upper_bound = int(np.maximum(1, self.count - 10.0*self.rate))
 
         candidates = self.transactions[lower_bound:upper_bound]
-        #at_least_5_cw = [t for t in self.transactions[lower_bound:upper_bound] if t.cumulative_weight_delayed() >= 5]
 
         particles = np.random.choice(candidates, num_particles)
         distances = {}
         for p in particles:
             t = threading.Thread(target=self._walk2(p))
             t.start()
-#            tip, distance = self._walk(p)
-#            distances[tip] = distance
             
-        #return [key for key in sorted(distances, key=distances.get, reverse=False)[:2]]
         tips = self.tip_walk_cache[:2]
+        conflict_flag, index_orphan = self.conflict_check(tips)   #checking for conflicts 
+        if conflict_flag == True:
+            t_name = tips[index_orphan].num
+            self.orphan_protocol(t_name)
+            return []
         #print(tips)
         self.tip_walk_cache = list()
-
         return tips
 
     def _walk2(self, starting_transaction):
@@ -262,6 +272,31 @@ class Tangle(object):
 
         return p, count
 
+    def test_mcmc(self, tips_to_check):
+        tip_0 = 0
+        tip_1 = 0
+        for i in range(100):
+            tips = self.mcmc()
+            if tips[0] == tips_to_check[0]:
+                tip_0 += 1
+            elif tips[1] == tips_to_check[1]:
+                tip_1 += 1
+        if tip_0 >= tip_1:
+            return 1    # Return the one to be orphaned
+        else:
+            return 0
+
+
+    def conflict_check(self, selected_tips):
+        print(selected_tips[0].content, selected_tips[1].content)
+        if selected_tips[0].content == selected_tips[1].content:
+            index = self.test_mcmc(selected_tips)
+            return True, index
+        return False, 2
+        
+
+        #return 0
+
     def plot(self):
         if hasattr(self, 'G'):
             pos = nx.get_node_attributes(self.G, 'pos')
@@ -271,6 +306,7 @@ class Tangle(object):
             plt.xlabel('Time')
             plt.yticks([])
             plt.show()
+
 
 class Transaction(object):
 
@@ -285,6 +321,7 @@ class Transaction(object):
         self.content = content   
         self.weight = NodeWeight     
         self.confirmed = False 
+        self.orphaned = False
 
         if hasattr(self.tangle, 'G'):
             self.tangle.G.add_node(self.num, pos=(self.time, np.random.uniform(-1, 1)))
@@ -314,7 +351,7 @@ class Transaction(object):
         if cached:
             #print("CWD", cached)
             if cached >= self.tangle.theta:
-                print("CWD", cached, self.tangle.theta)
+                #print("CWD", cached, self.tangle.theta)
                 self.confirmed = True
             return cached
 
