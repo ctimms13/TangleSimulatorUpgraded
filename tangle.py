@@ -147,6 +147,7 @@ class Tangle(object):
         self.cw_cache = dict()
         self.t_cache = set()
         self.tip_walk_cache = list()
+        self.tip_walk_checker = list()
 
     def printTransactionStats(self, t):
         print("------------")
@@ -173,7 +174,7 @@ class Tangle(object):
                 raise Exception()
 
         transaction = Transaction(self, self.time, approved_tips, self.count - 1, NodeWeight, content)
-        #self.printTransactionStats(transaction)
+        self.printTransactionStats(transaction)
         #print(approved_tips, "AP")
         for t in approved_tips:
             t.approved_time = np.minimum(self.time, t.approved_time)
@@ -203,7 +204,7 @@ class Tangle(object):
         for i in self.transactions:
             if i.num == index:
                 i.orphaned = True
-                print(i, i.orphaned)
+                #print(i, i.orphaned)
 
     def mcmc(self):
         num_particles = 10
@@ -226,6 +227,25 @@ class Tangle(object):
             return []
         #print(tips)
         self.tip_walk_cache = list()
+        return tips
+    
+    # Without this seperate checking function it goes into forever recursion
+    def mcmc_no_check(self):
+        num_particles = 10
+        lower_bound = int(np.maximum(0, self.count - 20.0*self.rate))
+        upper_bound = int(np.maximum(1, self.count - 10.0*self.rate))
+
+        candidates = self.transactions[lower_bound:upper_bound]
+
+        particles = np.random.choice(candidates, num_particles)
+        distances = {}
+        for p in particles:
+            t = threading.Thread(target=self._walk2(p))
+            t.start()
+            
+        tips = self.tip_walk_cache[:2]
+        #print(tips)
+        self.tip_walk_cache = list() # This may need changing to something else but if I don't have to I won't
         return tips
 
     def _walk2(self, starting_transaction):
@@ -276,7 +296,7 @@ class Tangle(object):
         tip_0 = 0
         tip_1 = 0
         for i in range(100):
-            tips = self.mcmc()
+            tips = self.mcmc_no_check()
             if tips[0] == tips_to_check[0]:
                 tip_0 += 1
             elif tips[1] == tips_to_check[1]:
@@ -288,8 +308,13 @@ class Tangle(object):
 
 
     def conflict_check(self, selected_tips):
-        print(selected_tips[0].content, selected_tips[1].content)
-        if selected_tips[0].content == selected_tips[1].content:
+        tip_1 = selected_tips[0]
+        tip_2 = selected_tips[1]
+        print("Conflict Check", tip_1.content, tip_2.content)
+        #print(tip_1.content, tip_2.content)
+        if isinstance(tip_1, Genesis) and isinstance(tip_2, Genesis):
+            print("First Approval")
+        elif tip_1.content == tip_2.content:
             index = self.test_mcmc(selected_tips)
             return True, index
         return False, 2
@@ -422,6 +447,7 @@ class watcher():
         self.record_of_confirmations = [self.confirmed_transactions]
         self.record_of_transactions = [self.number_of_transactions]
         self.times = [self.tangle_time]
+        self.orphans = []
     
     def update(self):
         self.number_of_transactions = len(self.tangle.transactions)
@@ -429,8 +455,12 @@ class watcher():
         self.confirmed_transactions = 0
         print(self.tangle.transactions)
         for c in self.tangle.transactions:
+            # If the transaction is confirmed add it here
             if c.confirmed == True:
                 self.confirmed_transactions += 1
+            # If the transaction is orphaned add it here
+            if c.orphaned == True:
+                self.orphans.append(c)
         self.number_of_tips = len(self.tangle.tips())
 
         self.times.append(self.tangle.time)
@@ -440,8 +470,9 @@ class watcher():
 
     def printStats(self):
         print("--------------")
-        print(self.confirmed_transactions)
-        print(self.number_of_transactions)
+        print("Number of Confirmed transactions", self.confirmed_transactions)
+        print("Number of Transactions", self.number_of_transactions)
+        print("Orphans", self.orphans)
 
     def plotTransactions(self):
         plt.plot(self.record_of_transactions, self.times)
