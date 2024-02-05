@@ -164,14 +164,14 @@ class Tangle(object):
         while done == False:
             if self.tip_selection == 'mcmc':
                 approved_tips = set(self.mcmc())
-                if len(approved_tips) > 0:
-                    done = True
+                done = True
             elif self.tip_selection == 'urts':
                 #approved_tips = set(self.urts())
                 approved_tips = self.urts()
                 done = True
             else:
                 raise Exception()
+                done = True
 
         transaction = Transaction(self, self.time, approved_tips, self.count - 1, NodeWeight, content)
         self.printTransactionStats(transaction)
@@ -206,25 +206,67 @@ class Tangle(object):
                 i.orphaned = True
                 #print(i, i.orphaned)
 
+    def tip_no_match(self):
+        ret = [self.tip_walk_cache[0]]
+        i = 1
+        while len(ret) == 1:
+            if self.tip_walk_cache[i] != ret[0]:
+                ret.append(self.tip_walk_cache[i])
+            else:
+                if i < len(self.tip_walk_cache)-1:
+                    i += 1
+                else:
+                    print("Fuck")
+        return ret
+
     def mcmc(self):
-        num_particles = 10
-        lower_bound = int(np.maximum(0, self.count - 20.0*self.rate))
-        upper_bound = int(np.maximum(1, self.count - 10.0*self.rate))
+        found = False
+        len_low = np.floor(len(self.transactions))
+        while found == False:
+            num_particles = 10
+            lower_bound = int(np.maximum(0, self.count - 20.0*self.rate))
+            upper_bound = int(np.maximum(len_low, self.count - 10.0*self.rate))
 
-        candidates = self.transactions[lower_bound:upper_bound]
+            candidates = self.transactions[lower_bound:upper_bound]
+            print("Bounds", lower_bound, upper_bound)
+            print("Candidates", candidates)
 
-        particles = np.random.choice(candidates, num_particles)
-        distances = {}
-        for p in particles:
-            t = threading.Thread(target=self._walk2(p))
-            t.start()
-            
-        tips = self.tip_walk_cache[:2]
-        conflict_flag, index_orphan = self.conflict_check(tips)   #checking for conflicts 
+            particles = np.random.choice(candidates, num_particles)
+            print("Particles = ", particles)
+            threads = []
+            for p in particles:
+                t = threading.Thread(target=self._walk2(p))
+                threads.append(t) # added to check if waiting for the threads will solve it
+                t.start()
+                
+            for th in threads:
+                th.join()
+
+            #print("Walk Chache", self.tip_walk_cache)
+
+            tips = self.tip_walk_cache[:2]
+            print("Tips", tips[0].num, tips[1].num)
+
+            if (tips[0].isGenesis == True and tips[1].isGenesis == True) and len(self.transactions) < 4:
+                print("2 Genesis Found")
+                found = True
+            elif tips[0].num != tips[1].num:
+                print("Selected Different Transactions")
+                found = True
+            else:
+                #break
+                tips = self.tip_no_match()
+                print("Same non-genesis selected")
+                print("New Tips", tips[0].num, tips[1].num)
+                found == True
+                # Try again sucker
+
+
+        """conflict_flag, index_orphan = self.conflict_check(tips)   #checking for conflicts 
         if conflict_flag == True:
             t_name = tips[index_orphan].num
             self.orphan_protocol(t_name)
-            return []
+            return []"""
         #print(tips)
         self.tip_walk_cache = list()
         return tips
@@ -238,17 +280,23 @@ class Tangle(object):
         candidates = self.transactions[lower_bound:upper_bound]
 
         particles = np.random.choice(candidates, num_particles)
-        distances = {}
+        threads = []
         for p in particles:
             t = threading.Thread(target=self._walk2(p))
+            threads.append(t)
             t.start()
-            
+
+        for th in threads:
+           th.join()
+
+        
         tips = self.tip_walk_cache[:2]
         #print(tips)
         self.tip_walk_cache = list() # This may need changing to something else but if I don't have to I won't
         return tips
 
     def _walk2(self, starting_transaction):
+        #print("In walk")
         p = starting_transaction
         while not p.is_tip_delayed() and p.is_visible():
             if len(self.tip_walk_cache) >= 2:
@@ -295,7 +343,7 @@ class Tangle(object):
     def test_mcmc(self, tips_to_check):
         tip_0 = 0
         tip_1 = 0
-        for i in range(100):
+        for i in range(10):
             tips = self.mcmc_no_check()
             if tips[0] == tips_to_check[0]:
                 tip_0 += 1
@@ -310,11 +358,12 @@ class Tangle(object):
     def conflict_check(self, selected_tips):
         tip_1 = selected_tips[0]
         tip_2 = selected_tips[1]
-        print("Conflict Check", tip_1.content, tip_2.content)
+        print("Conflict Check", tip_1.content, tip_1.num, tip_2.content, tip_2.num)
         #print(tip_1.content, tip_2.content)
-        if isinstance(tip_1, Genesis) and isinstance(tip_2, Genesis):
+        if tip_1.isGenesis == True or tip_2.isGenesis == True:
             print("First Approval")
         elif tip_1.content == tip_2.content:
+            #print("How the fuck")
             index = self.test_mcmc(selected_tips)
             return True, index
         return False, 2
@@ -347,6 +396,7 @@ class Transaction(object):
         self.weight = NodeWeight     
         self.confirmed = False 
         self.orphaned = False
+        self.isGenesis = False
 
         if hasattr(self.tangle, 'G'):
             self.tangle.G.add_node(self.num, pos=(self.time, np.random.uniform(-1, 1)))
@@ -427,6 +477,8 @@ class Genesis(Transaction):
         self.content = 0    # add a section in init
         self.weight = 1     # add a section in init
         self.confirmed = True
+        self.isGenesis = True
+        self.orphaned = False
         if hasattr(self.tangle, 'G'):
             self.tangle.G.add_node(self.num, pos=(self.time, 0))
 
