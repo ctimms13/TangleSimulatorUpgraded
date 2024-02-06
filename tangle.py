@@ -36,7 +36,7 @@ class node_graph():
         self.nodeWeights.clear()
         return ww
 
-    def new_node(self):
+    def new_node(self, mal=False):
         nodeID = self.count
         self.count += 1
         if not self.nodes:
@@ -66,7 +66,10 @@ class node_graph():
                 if item not in edges:
                     edges.append(item)
                     j += 1
-            n = node(edges, nodeID, self.tangle, ww)
+            if mal == True:
+                n = mal_node(edges, nodeID, self.tangle, ww) # If it's marked as a malicious node make one of those
+            else:
+                n = node(edges, nodeID, self.tangle, ww)
             for m in self.nodes:
                 self.nodeWeights.append([m.id, m.signature, m.ww])
             self.nodeWeights.append([nodeID, n.signature, ww])
@@ -108,23 +111,104 @@ class node():
         self.signature = np.random.randint(2048)
         self.ww = ww
         self.tangle = tangle
-       
-    def orphaned_block():
-        #Ask neighbours for the block
-        return 0
-    
+         
     def issue_transaction(self):
         #Take a bunch of parameters for the block and transactions within
         content = random.randint(0, 100)
         nodeSig = self.signature
-        self.tangle.next_transaction(self.ww, content)
-    
-    def get_block_list():
-        #Return all the blocks issued by this node
-        return 0
+        self.tangle.next_transaction(self.ww, content, False)
     
     def update_neighbourhood(self, newNeighbour):
         self.neighbourhood.append(newNeighbour.id)
+
+
+
+class mal_node(node):
+
+    def __init__(self, edges, nodeID, tangle, ww):
+        self.id = nodeID
+        self.neighbourhood = edges
+        self.signature = np.random.randint(2048)
+        self.ww = 4
+        self.tangle = tangle
+        self.ds_start = None
+        self.chain = []
+    
+    def issue_bad_transaction(self):
+        #Take a bunch of parameters for the block and transactions within
+        content = random.randint(0, 100)
+        nodeSig = self.signature
+        self.tangle.next_transaction(self.ww, content, True)
+        self.catch_PC_tr()
+
+    def spam_transactions(self, num):
+        for i in range(num):
+            content = random.randint(0, 100)
+            nodeSig = self.signature
+            self.mal_next_transaction(self.ww, content, False)
+
+    def catch_PC_tr(self):
+        for t in self.tangle.transactions:
+            if t.DS_transaction == True:
+                self.ds_start = t
+                self.chain.append(t)
+
+    
+    def mal_mcmc(self):
+        found = False
+        len_low = np.floor(len(self.tangle.transactions))
+        while found == False:
+            num_particles = 10
+            lower_bound = int(np.maximum(0, self.tangle.count - 20.0*self.tangle.rate))
+            upper_bound = int(np.maximum(len_low, 
+                                         self.tangle.count - 10.0*self.tangle.rate))
+
+            candidates = self.tangle.transactions[lower_bound:upper_bound]
+
+            particles = np.random.choice(candidates, num_particles)
+            #print("Particles = ", particles)
+            threads = []
+            for p in particles:
+                t = threading.Thread(target=self.tangle._walk2(p))
+                threads.append(t) # added to check if waiting for the threads will solve it
+                t.start()
+                
+            for th in threads:
+                th.join()
+
+            #print("Walk Chache", self.tip_walk_cache)
+
+            tips = self.tangle.tip_walk_cache[:1]
+            print("Tips", tips[0].num)
+            found = True
+
+        self.tangle.tip_walk_cache = list()
+        return tips
+        
+    def mal_next_transaction(self, NodeWeight, content, DS):
+        dt_time = np.random.exponential(1.0/self.tangle.rate)
+        self.tangle.time += dt_time
+        self.tangle.count += 1
+        tip2 = self.mal_mcmc()[0]
+        tip1 = self.chain[-1]
+        approved_tips = [tip1, tip2]
+        transaction = Transaction(self.tangle, self.tangle.time, 
+                                    approved_tips, self.tangle.count - 1, NodeWeight, 
+                                    content, DS)
+            #print(approved_tips, "AP")
+        for t in approved_tips:
+            print("approved", t)
+            t.approved_time = np.minimum(self.tangle.time, t.approved_time)
+            t._approved_directly_by.add(transaction)
+
+            if hasattr(self.tangle, 'G'):
+                self.tangle.G.add_edges_from([(transaction.num, t.num)])
+
+        self.tangle.transactions.append(transaction)
+        self.chain.append(transaction)
+        self.tangle.cw_cache = {}
+
+
 
 
 class Tangle(object):
@@ -156,7 +240,7 @@ class Tangle(object):
         print("Node Weight", t.weight)
         print("Confirmed Status", t.confirmed)
 
-    def next_transaction(self, NodeWeight, content):
+    def next_transaction(self, NodeWeight, content, DS):
         dt_time = np.random.exponential(1.0/self.rate)
         self.time += dt_time
         self.count += 1
@@ -172,20 +256,31 @@ class Tangle(object):
             else:
                 raise Exception()
                 done = True
+        if DS == False:
+            transaction = Transaction(self, self.time, approved_tips, self.count - 1, NodeWeight, content, DS)
+            self.printTransactionStats(transaction)
+            #print(approved_tips, "AP")
+            for t in approved_tips:
+                t.approved_time = np.minimum(self.time, t.approved_time)
+                t._approved_directly_by.add(transaction)
 
-        transaction = Transaction(self, self.time, approved_tips, self.count - 1, NodeWeight, content)
-        self.printTransactionStats(transaction)
-        #print(approved_tips, "AP")
-        for t in approved_tips:
-            t.approved_time = np.minimum(self.time, t.approved_time)
-            t._approved_directly_by.add(transaction)
+                if hasattr(self, 'G'):
+                    self.G.add_edges_from([(transaction.num, t.num)])
 
-            if hasattr(self, 'G'):
-                self.G.add_edges_from([(transaction.num, t.num)])
+            self.transactions.append(transaction)
 
-        self.transactions.append(transaction)
+            self.cw_cache = {}
 
-        self.cw_cache = {}
+        elif DS == True:
+            transaction = Transaction(self, self.time, approved_tips, self.count - 1, NodeWeight, content, DS)
+            for t in approved_tips:
+                t.approved_time = np.minimum(self.time, t.approved_time)
+                t._approved_directly_by.add(transaction)
+                if hasattr(self, 'G'):
+                    self.G.add_edges_from([(transaction.num, t.num)])
+            self.transactions.append(transaction)
+            self.cw_cache = {}
+
 
     def tips(self):
         return [t for t in self.transactions if t.is_visible() and t.is_tip_delayed()]
@@ -217,6 +312,15 @@ class Tangle(object):
                     i += 1
                 else:
                     print("Fuck")
+                    # add a section about picking another of the latest 3 transactions
+                    new_tran = np.random.choice(self.transactions[:2], 1)
+                    print(new_tran)
+                    new_tp = new_tran[0]
+                    while ret[0] == new_tp:
+                        new_tran = np.random.choice(self.transactions[:2], 1) # chooce a random option of the last two
+                        new_tp = new_tran[0]
+                    ret.append(new_tp)
+                    print(ret)
         return ret
 
     def mcmc(self):
@@ -228,11 +332,11 @@ class Tangle(object):
             upper_bound = int(np.maximum(len_low, self.count - 10.0*self.rate))
 
             candidates = self.transactions[lower_bound:upper_bound]
-            print("Bounds", lower_bound, upper_bound)
-            print("Candidates", candidates)
+            #print("Bounds", lower_bound, upper_bound)
+            #print("Candidates", candidates)
 
             particles = np.random.choice(candidates, num_particles)
-            print("Particles = ", particles)
+            #print("Particles = ", particles)
             threads = []
             for p in particles:
                 t = threading.Thread(target=self._walk2(p))
@@ -258,7 +362,8 @@ class Tangle(object):
                 tips = self.tip_no_match()
                 print("Same non-genesis selected")
                 print("New Tips", tips[0].num, tips[1].num)
-                found == True
+                found = True
+                #tips = self.tip_walk_cache[:2] # <- THIS IS A TEMPORARY MEASURE WHILE I SORT OUT PARASITE CHAIN 
                 # Try again sucker
 
 
@@ -384,7 +489,7 @@ class Tangle(object):
 
 class Transaction(object):
 
-    def __init__(self, tangle, time, approved_transactions, num, NodeWeight, content):
+    def __init__(self, tangle, time, approved_transactions, num, NodeWeight, content, double_spend=False):
         self.tangle = tangle
         self.time = time
         self.approved_transactions = approved_transactions
@@ -397,6 +502,7 @@ class Transaction(object):
         self.confirmed = False 
         self.orphaned = False
         self.isGenesis = False
+        self.DS_transaction = double_spend
 
         if hasattr(self.tangle, 'G'):
             self.tangle.G.add_node(self.num, pos=(self.time, np.random.uniform(-1, 1)))
@@ -479,6 +585,7 @@ class Genesis(Transaction):
         self.confirmed = True
         self.isGenesis = True
         self.orphaned = False
+        self.DS_transaction = False
         if hasattr(self.tangle, 'G'):
             self.tangle.G.add_node(self.num, pos=(self.time, 0))
 
