@@ -36,7 +36,7 @@ class node_graph():
         self.nodeWeights.clear()
         return ww
 
-    def new_node(self, mal=False):
+    def new_node(self, mal=False, watch=None):
         nodeID = self.count
         self.count += 1
         if not self.nodes:
@@ -67,7 +67,7 @@ class node_graph():
                     edges.append(item)
                     j += 1
             if mal == True:
-                n = mal_node(edges, nodeID, self.tangle, ww) # If it's marked as a malicious node make one of those
+                n = mal_node(edges, nodeID, self.tangle, ww, watch) # If it's marked as a malicious node make one of those
             else:
                 n = node(edges, nodeID, self.tangle, ww)
             for m in self.nodes:
@@ -125,7 +125,7 @@ class node():
 
 class mal_node(node):
 
-    def __init__(self, edges, nodeID, tangle, ww):
+    def __init__(self, edges, nodeID, tangle, ww, watcher):
         self.id = nodeID
         self.neighbourhood = edges
         self.signature = np.random.randint(2048)
@@ -133,6 +133,7 @@ class mal_node(node):
         self.tangle = tangle
         self.ds_start = None
         self.chain = []
+        self.watcher = watcher
     
     def issue_bad_transaction(self):
         #Take a bunch of parameters for the block and transactions within
@@ -146,6 +147,7 @@ class mal_node(node):
             content = random.randint(0, 100)
             nodeSig = self.signature
             self.mal_next_transaction(self.ww, content, False)
+            self.watcher.update()
 
     def catch_PC_tr(self):
         for t in self.tangle.transactions:
@@ -503,6 +505,7 @@ class Transaction(object):
         self.orphaned = False
         self.isGenesis = False
         self.DS_transaction = double_spend
+        self.cum_weight = NodeWeight
 
         if hasattr(self.tangle, 'G'):
             self.tangle.G.add_node(self.num, pos=(self.time, np.random.uniform(-1, 1)))
@@ -525,6 +528,7 @@ class Transaction(object):
         self.tangle.t_cache = set()
         if cw >= self.tangle.theta:
             self.confirmed = True
+        self.cum_weight = cw
         return cw
 
     def cumulative_weight_delayed(self):
@@ -545,7 +549,7 @@ class Transaction(object):
             self.tangle.t_cache = set()
             self.tangle.cw_cache[self.num] = cached
         #print(self.weight, cached)
-
+        self.cum_weight = cached
         return cached
 
     def approved_by(self):
@@ -607,10 +611,24 @@ class watcher():
         self.record_of_transactions = [self.number_of_transactions]
         self.times = [self.tangle_time]
         self.orphans = []
-    
+        self.bad_transaction = None
+        self.bad_nodes = []
+        self.cw_over_time_PC = [] # Cumulative weight of the PC transaction over time
+        self.PC_times = []
+
+    def mal_tran_get(self):
+        for t in self.tangle.transactions:
+            if t.DS_transaction == True:
+                self.bad_transaction = t
+
+
     def update(self):
+        self.mal_tran_get()
         self.number_of_transactions = len(self.tangle.transactions)
         self.record_of_transactions.append(self.number_of_transactions)
+        if self.bad_transaction != None:
+            self.cw_over_time_PC.append(self.bad_transaction.cum_weight)
+            self.PC_times.append(self.tangle.time)
         self.confirmed_transactions = 0
         print(self.tangle.transactions)
         for c in self.tangle.transactions:
@@ -648,3 +666,10 @@ class watcher():
         plt.plot(self.record_of_confirmations, self.times)
         plt.xlabel('Time')
         plt.ylabel('Confirmations')
+
+    def plot_cum_weight(self):
+        print(self.cw_over_time_PC, self.PC_times)
+       # plt.plot(self.cw_over_time_PC, self.PC_times)
+        plt.plot(self.PC_times, self.cw_over_time_PC)
+        plt.xlabel('Time')
+        plt.ylabel('Weight')
