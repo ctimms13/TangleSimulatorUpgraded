@@ -32,7 +32,8 @@ class node_graph():
     
     def assignWW(self):
         #ww = 1 / len(self.nodes)
-        ww = random.randint(1, 4)
+        #ww = random.randint(1, 4)
+        ww = 1
         self.nodeWeights.clear()
         return ww
 
@@ -129,7 +130,7 @@ class mal_node(node):
         self.id = nodeID
         self.neighbourhood = edges
         self.signature = np.random.randint(2048)
-        self.ww = 4
+        self.ww = 1
         self.tangle = tangle
         self.ds_start = None
         self.chain = []
@@ -668,8 +669,13 @@ class watcher():
         plt.ylabel('Confirmations')
 
     def plot_cum_weight(self):
-        print(self.cw_over_time_PC, self.PC_times)
-       # plt.plot(self.cw_over_time_PC, self.PC_times)
+        #print(self.cw_over_time_PC, self.PC_times)
+        plt.plot(self.cw_over_time_PC, self.PC_times)
+        #plt.plot(self.PC_times, self.cw_over_time_PC)
+        plt.xlabel('Time')
+        plt.ylabel('Weight')
+
+    def plot_PC_cum_weight(self):
         plt.plot(self.PC_times, self.cw_over_time_PC)
         plt.xlabel('Time')
         plt.ylabel('Weight')
