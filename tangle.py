@@ -3,6 +3,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import threading
 import random
+import pandas as pd
 
 
 
@@ -123,7 +124,6 @@ class node():
         self.neighbourhood.append(newNeighbour.id)
 
 
-
 class mal_node(node):
 
     def __init__(self, edges, nodeID, tangle, ww, watcher):
@@ -210,8 +210,6 @@ class mal_node(node):
         self.tangle.transactions.append(transaction)
         self.chain.append(transaction)
         self.tangle.cw_cache = {}
-
-
 
 
 class Tangle(object):
@@ -330,7 +328,7 @@ class Tangle(object):
         found = False
         len_low = np.floor(len(self.transactions))
         while found == False:
-            num_particles = 10
+            num_particles = 20
             lower_bound = int(np.maximum(0, self.count - 20.0*self.rate))
             upper_bound = int(np.maximum(len_low, self.count - 10.0*self.rate))
 
@@ -654,17 +652,20 @@ class watcher():
 
     def plotTransactions(self):
         plt.plot(self.record_of_transactions, self.times)
+        plt.title('Number of Transactions over Time')
         plt.xlabel('Time')
         plt.ylabel('Transactions')
 
     def plot_tips_over_time(self):
         plt.bar(self.times, self.record_of_tips)
+        plt.title('Number of Tips over Time')
         plt.xlabel('Time')
         plt.ylabel('Tips')
 
     def plot_confirm_over_time(self):
         print(self.record_of_confirmations, self.times)
         plt.plot(self.record_of_confirmations, self.times)
+        plt.title('Number of Confirmations over Time')
         plt.xlabel('Time')
         plt.ylabel('Confirmations')
 
@@ -672,10 +673,70 @@ class watcher():
         #print(self.cw_over_time_PC, self.PC_times)
         plt.plot(self.cw_over_time_PC, self.PC_times)
         #plt.plot(self.PC_times, self.cw_over_time_PC)
+        plt.title('Total Cumulative Weight of Transactions')
         plt.xlabel('Time')
         plt.ylabel('Weight')
 
     def plot_PC_cum_weight(self):
         plt.plot(self.PC_times, self.cw_over_time_PC)
+        plt.title('Parasite Chain Cumulative Weight')
         plt.xlabel('Time')
         plt.ylabel('Weight')
+
+    def output_to_sheet(self, i):
+        res_times = self.times
+        new_times =  [round(x,1) for x in res_times] 
+        dict = {'confirmations': self.record_of_confirmations, 'time': new_times}
+        df = pd.DataFrame(dict)
+        #print(new_times)
+        #print(df)
+        df.to_csv("confirmations"+str(i)) #save up to i different sets of results
+    
+
+class analyser():
+
+    def __init__(self):
+        self.help = None 
+        self.me = None 
+        self.please = None 
+
+    def get_res(self, i):
+        num_of_runs = i
+        j = 1
+        results = []
+        
+        while j <= num_of_runs:
+            df = pd.read_csv("confirmations"+str(j))
+            length = df.shape[0]
+            curRow = 0
+            while curRow < length:
+                next_time = df.iloc[curRow, 2]
+                next_val = df.iloc[curRow, 1]
+                if len(results) == 0:
+                    results.append([next_time, next_val, 1])
+                else:
+                    res_counter = 0
+                    len_res = len(results)
+                    while res_counter <= len_res:
+                        
+                        if res_counter == len_res:
+                            results.append([next_time, next_val, 1])
+
+                        elif results[res_counter][0] == next_time:
+                            results[res_counter][2] += 1
+                            results[res_counter][1] = (results[res_counter][1]+next_val)/results[res_counter][2] 
+                            # Average the value so I don't have to do it later  
+
+                        elif results[res_counter][0] > next_time:
+                            i = x.index()
+                            results.insert(i, [next_time, next_val, 1])
+                        
+                        res_counter += 1
+
+                curRow += 1
+            j += 1
+        print(results)
+
+
+            
+
