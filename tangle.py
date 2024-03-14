@@ -155,7 +155,6 @@ class mal_node(node):
             if t.DS_transaction == True:
                 self.ds_start = t
                 self.chain.append(t)
-
     
     def mal_mcmc(self):
         found = False
@@ -182,7 +181,7 @@ class mal_node(node):
             #print("Walk Chache", self.tip_walk_cache)
 
             tips = self.tangle.tip_walk_cache[:1]
-            print("Tips", tips[0].num)
+            #print("Tips", tips[0].num)
             found = True
 
         self.tangle.tip_walk_cache = list()
@@ -200,7 +199,7 @@ class mal_node(node):
                                     content, DS)
             #print(approved_tips, "AP")
         for t in approved_tips:
-            print("approved", t)
+            #print("approved", t)
             t.approved_time = np.minimum(self.tangle.time, t.approved_time)
             t._approved_directly_by.add(transaction)
 
@@ -312,16 +311,16 @@ class Tangle(object):
                 if i < len(self.tip_walk_cache)-1:
                     i += 1
                 else:
-                    print("Fuck")
+                    #print("Fuck")
                     # add a section about picking another of the latest 3 transactions
                     new_tran = np.random.choice(self.transactions[:2], 1)
-                    print(new_tran)
+                    #print(new_tran)
                     new_tp = new_tran[0]
                     while ret[0] == new_tp:
                         new_tran = np.random.choice(self.transactions[:2], 1) # chooce a random option of the last two
                         new_tp = new_tran[0]
                     ret.append(new_tp)
-                    print(ret)
+                    #print(ret)
         return ret
 
     def mcmc(self):
@@ -350,19 +349,19 @@ class Tangle(object):
             #print("Walk Chache", self.tip_walk_cache)
 
             tips = self.tip_walk_cache[:2]
-            print("Tips", tips[0].num, tips[1].num)
+            #print("Tips", tips[0].num, tips[1].num)
 
             if (tips[0].isGenesis == True and tips[1].isGenesis == True) and len(self.transactions) < 4:
-                print("2 Genesis Found")
+                #print("2 Genesis Found")
                 found = True
             elif tips[0].num != tips[1].num:
-                print("Selected Different Transactions")
+                #print("Selected Different Transactions")
                 found = True
             else:
                 #break
                 tips = self.tip_no_match()
-                print("Same non-genesis selected")
-                print("New Tips", tips[0].num, tips[1].num)
+                #print("Same non-genesis selected")
+                #print("New Tips", tips[0].num, tips[1].num)
                 found = True
                 #tips = self.tip_walk_cache[:2] # <- THIS IS A TEMPORARY MEASURE WHILE I SORT OUT PARASITE CHAIN 
                 # Try again sucker
@@ -630,7 +629,7 @@ class watcher():
             self.cw_over_time_PC.append(self.bad_transaction.cum_weight)
             self.PC_times.append(self.tangle.time)
         self.confirmed_transactions = 0
-        print(self.tangle.transactions)
+        #print(self.tangle.transactions)
         for c in self.tangle.transactions:
             # If the transaction is confirmed add it here
             if c.confirmed == True:
