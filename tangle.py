@@ -727,10 +727,9 @@ class analyser():
 
                         elif results[res_counter][0] == next_time:
                             results[res_counter][2] += 1
-                            results[res_counter][1] = (results[res_counter][1]+next_val)/results[res_counter][2] 
+                            results[res_counter][1] = (results[res_counter][1]+next_val)
                             #print([next_time, next_val, "Fuck", res_counter])
                             found = True
-                            # Average the value so I don't have to do it later  
 
                         elif (results[res_counter][0] > next_time) and (results[res_counter][0] != next_time):
                             i = res_counter
@@ -741,6 +740,11 @@ class analyser():
 
                 curRow += 1
             j += 1
+
+        for x in results:
+            temp = x[1]
+            x[1] = temp/x[2]
+
         print(results)
         return results
 
