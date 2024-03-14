@@ -597,8 +597,9 @@ class Genesis(Transaction):
 
 class watcher():
 
-    def __init__(self, tangle, node_g):
+    def __init__(self, tangle, node_g, ID):
 
+        self.ID = ID    # Single integer number to identify the experiment 
         self.confirmed_transactions = 1
         self.number_of_transactions = 1
         self.number_of_tips = 0
@@ -683,14 +684,14 @@ class watcher():
         plt.xlabel('Time')
         plt.ylabel('Weight')
 
-    def output_to_sheet(self, i):
+    def output_to_sheet(self):
         res_times = self.times
         new_times =  [round(x,1) for x in res_times] 
         dict = {'confirmations': self.record_of_confirmations, 'time': new_times}
         df = pd.DataFrame(dict)
         #print(new_times)
         #print(df)
-        df.to_csv("confirmations"+str(i)) #save up to i different sets of results
+        df.to_csv("confirmations"+str(self.ID)) #save up to i different sets of results
     
 
 class analyser():
@@ -717,19 +718,25 @@ class analyser():
                 else:
                     res_counter = 0
                     len_res = len(results)
-                    while res_counter <= len_res:
+                    found = False   # Flag to dictate 
+                    while (res_counter <= len_res) and found == False:
                         
                         if res_counter == len_res:
                             results.append([next_time, next_val, 1])
+                            #print([next_time, next_val, 1, res_counter])
+                            found = True
 
                         elif results[res_counter][0] == next_time:
                             results[res_counter][2] += 1
                             results[res_counter][1] = (results[res_counter][1]+next_val)/results[res_counter][2] 
+                            #print([next_time, next_val, "Fuck", res_counter])
+                            found = True
                             # Average the value so I don't have to do it later  
 
-                        elif results[res_counter][0] > next_time:
-                            i = x.index()
+                        elif (results[res_counter][0] > next_time) and (results[res_counter][0] != next_time):
+                            i = res_counter
                             results.insert(i, [next_time, next_val, 1])
+                            found = True
                         
                         res_counter += 1
 
