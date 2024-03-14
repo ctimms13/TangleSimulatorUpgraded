@@ -685,7 +685,7 @@ class watcher():
 
     def output_to_sheet(self):
         res_times = self.times
-        new_times =  [round(x,1) for x in res_times] 
+        new_times =  [round(x) for x in res_times] 
         dict = {'confirmations': self.record_of_confirmations, 'time': new_times}
         df = pd.DataFrame(dict)
         #print(new_times)
@@ -742,6 +742,7 @@ class analyser():
                 curRow += 1
             j += 1
         print(results)
+        return results
 
 
             
