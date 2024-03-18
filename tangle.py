@@ -614,6 +614,7 @@ class watcher():
         self.bad_nodes = []
         self.cw_over_time_PC = [] # Cumulative weight of the PC transaction over time
         self.PC_times = []
+        self.PC_add_time = 0 #The time the PC chain was added
 
     def mal_tran_get(self):
         for t in self.tangle.transactions:
@@ -664,7 +665,11 @@ class watcher():
 
     def plot_confirm_over_time(self):
         print(self.record_of_confirmations, self.times)
-        plt.plot(self.record_of_confirmations, self.times)
+        minC = self.record_of_confirmations[0] # First element in list
+        maxC = self.record_of_confirmations[-1] # Last element in list
+        plt.plot(self.record_of_confirmations, self.times, label="Experiment")
+        plt.vlines(self.PC_add_time, minC, maxC, label="PC Time", colors='darkblue', linestyles='dotted')
+        plt.legend()
         plt.title('Number of Confirmations over Time')
         plt.xlabel('Time')
         plt.ylabel('Confirmations')
@@ -748,6 +753,18 @@ class analyser():
         print(results)
         return results
 
-
+    def plot_multi(self, i):
+        j = 1
+        while j <= i:
+             df = pd.read_csv("confirmations"+str(j))
+             times = df.time
+             confirms = df.confirmations
+             plt.plot(confirms, times, label="Experiment "+str(j))
+             j += 1
+        plt.legend()
+        plt.xlabel('Time')
+        plt.ylabel('Confirmations')
+        plt.title("Confirmations over Time")
+        plt.show()
             
 
