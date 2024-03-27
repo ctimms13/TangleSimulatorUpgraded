@@ -135,6 +135,7 @@ class mal_node(node):
         self.ds_start = None
         self.chain = []
         self.watcher = watcher
+        self.approve_point = None
     
     def issue_bad_transaction(self):
         #Take a bunch of parameters for the block and transactions within
@@ -188,10 +189,10 @@ class mal_node(node):
         return tips
         
     def mal_next_transaction(self, NodeWeight, content, DS):
-        dt_time = np.random.exponential(1.0/self.tangle.rate)
-        self.tangle.time += dt_time
+        #dt_time = np.random.exponential(1.0/self.tangle.rate)      #Add these two lines back in
+        #self.tangle.time += dt_time
         self.tangle.count += 1
-        tip2 = self.mal_mcmc()[0]
+        tip2 = self.tangle.chain_attach_point   #self.mal_mcmc()[0] 
         tip1 = self.chain[-1]
         approved_tips = [tip1, tip2]
         transaction = Transaction(self.tangle, self.tangle.time, 
@@ -218,6 +219,7 @@ class Tangle(object):
         self.rate = rate
         self.alpha = alpha
         self.theta = 5 # confirmation threshold
+        self.chain_attach_point = None
         
         if plot:
             #self.G = nx.OrderedDiGraph()
@@ -239,6 +241,7 @@ class Tangle(object):
         print("Transaction Content", t.content)
         print("Node Weight", t.weight)
         print("Confirmed Status", t.confirmed)
+        print("Weight ", t.cum_weight)
 
     def next_transaction(self, NodeWeight, content, DS):
         dt_time = np.random.exponential(1.0/self.rate)
@@ -273,6 +276,7 @@ class Tangle(object):
 
         elif DS == True:
             transaction = Transaction(self, self.time, approved_tips, self.count - 1, NodeWeight, content, DS)
+            self.chain_attach_point = list(approved_tips)[0]
             for t in approved_tips:
                 t.approved_time = np.minimum(self.time, t.approved_time)
                 t._approved_directly_by.add(transaction)
@@ -327,7 +331,7 @@ class Tangle(object):
         found = False
         len_low = np.floor(len(self.transactions))
         while found == False:
-            num_particles = 20
+            num_particles = 40
             lower_bound = int(np.maximum(0, self.count - 20.0*self.rate))
             upper_bound = int(np.maximum(len_low, self.count - 10.0*self.rate))
 
@@ -347,7 +351,10 @@ class Tangle(object):
                 th.join()
 
             #print("Walk Chache", self.tip_walk_cache)
-
+            for tran in self.tip_walk_cache:
+                if tran.confirmed == True:
+                    self.tip_walk_cache.remove(tran)
+            #print(self.tip_walk_cache)
             tips = self.tip_walk_cache[:2]
             #print("Tips", tips[0].num, tips[1].num)
 
@@ -366,12 +373,6 @@ class Tangle(object):
                 #tips = self.tip_walk_cache[:2] # <- THIS IS A TEMPORARY MEASURE WHILE I SORT OUT PARASITE CHAIN 
                 # Try again sucker
 
-
-        """conflict_flag, index_orphan = self.conflict_check(tips)   #checking for conflicts 
-        if conflict_flag == True:
-            t_name = tips[index_orphan].num
-            self.orphan_protocol(t_name)
-            return []"""
         #print(tips)
         self.tip_walk_cache = list()
         return tips
